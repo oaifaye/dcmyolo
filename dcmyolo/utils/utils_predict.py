@@ -20,68 +20,23 @@ from PIL import Image
 训练自己的数据集必看注释！
 '''
 class YOLO(object):
-    _defaults = {
-        #--------------------------------------------------------------------------#
-        #   使用自己训练好的模型进行预测一定要修改model_path和classes_path！
-        #   model_path指向logs文件夹下的权值文件，classes_path指向model_data下的txt
-        #
-        #   训练好后logs文件夹下存在多个权值文件，选择验证集损失较低的即可。
-        #   验证集损失较低不代表mAP较高，仅代表该权值在验证集上泛化性能较好。
-        #   如果出现shape不匹配，同时要注意训练时的model_path和classes_path参数的修改
-        #--------------------------------------------------------------------------#
-        # "model_path"        : 'model_data/ep4990-loss0.059-val_loss0.085.pth',
-        "model_path"        : 'dcmyolo/model_data/best_epoch_weights.pth',
-        "classes_path"      : 'dcmyolo/model_data/wangzhe_classes.txt',
-        #---------------------------------------------------------------------#
-        #   anchors_path代表先验框对应的txt文件，一般不修改。
-        #   anchors_mask用于帮助代码找到对应的先验框，一般不修改。
-        #---------------------------------------------------------------------#
-        "anchors_path"      : 'dcmyolo/model_data/coco_anchors.txt',
-        "anchors_mask"      : [[6, 7, 8], [3, 4, 5], [0, 1, 2]],
-        #---------------------------------------------------------------------#
-        #   输入图片的大小，必须为32的倍数。
-        #---------------------------------------------------------------------#
-        "input_shape"       : [640, 640],
-        #------------------------------------------------------#
-        #   phi             所使用的YoloV5的版本。n、s、m、l、x
-        #------------------------------------------------------#
-        "phi"               : 's',
-        #---------------------------------------------------------------------#
-        #   只有得分大于置信度的预测框会被保留下来
-        #---------------------------------------------------------------------#
-        "confidence"        : 0.5,
-        #---------------------------------------------------------------------#
-        #   非极大抑制所用到的nms_iou大小
-        #---------------------------------------------------------------------#
-        "nms_iou"           : 0.3,
-        #---------------------------------------------------------------------#
-        #   该变量用于控制是否使用letterbox_image对输入图像进行不失真的resize，
-        #   在多次测试后，发现关闭letterbox_image直接resize的效果更好
-        #---------------------------------------------------------------------#
-        "letterbox_image"   : True,
-        #-------------------------------#
-        #   是否使用Cuda
-        #   没有GPU可以设置成False
-        #-------------------------------#
-        "cuda"              : torch.cuda.is_available(),
-    }
-
-    @classmethod
-    def get_defaults(cls, n):
-        if n in cls._defaults:
-            return cls._defaults[n]
-        else:
-            return "Unrecognized attribute name '" + n + "'"
-
     #---------------------------------------------------#
     #   初始化YOLO
     #---------------------------------------------------#
-    def __init__(self, **kwargs):
-        self.__dict__.update(self._defaults)
-        for name, value in kwargs.items():
-            setattr(self, name, value)
-            self._defaults[name] = value 
-            
+    def __init__(self, model_path="dcmyolo/model_data/best_epoch_weights.pth", classes_path=None, anchors_path='dcmyolo/model_data/coco_anchors.txt',
+                 input_shape=[640, 640], phi='s', confidence=0.2, nms_iou=0.3, letterbox_image=False, need_detect_box=False):
+        self.model_path =model_path
+        self.classes_path =classes_path
+        self.anchors_path =anchors_path
+        self.model_path =model_path
+        self.phi = phi
+        self.confidence =confidence
+        self.nms_iou =nms_iou
+        self.letterbox_image =letterbox_image
+        self.need_detect_box =need_detect_box
+        self.input_shape =input_shape
+        self.anchors_mask = [[6, 7, 8], [3, 4, 5], [0, 1, 2]]
+        self.cuda = torch.cuda.is_available()
         #---------------------------------------------------#
         #   获得种类和先验框的数量
         #---------------------------------------------------#
@@ -97,7 +52,9 @@ class YOLO(object):
         self.colors = list(map(lambda x: (int(x[0] * 255), int(x[1] * 255), int(x[2] * 255)), self.colors))
         self.generate()
 
-        show_config(**self._defaults)
+        show_config(model_path=model_path, classes_path=classes_path, anchors_path=anchors_path,
+                    input_shape=input_shape, phi=phi, confidence=confidence, nms_iou=nms_iou,
+                    letterbox_image=letterbox_image, need_detect_box=need_detect_box)
 
     #---------------------------------------------------#
     #   生成模型
@@ -107,7 +64,7 @@ class YOLO(object):
         #   建立yolo模型，载入yolo模型的权重
         #---------------------------------------------------#
         self.net    = YoloBody(self.anchors_mask, self.num_classes, self.phi, self.anchors,
-                               (self.input_shape[0], self.input_shape[1]), need_detect_box=True)
+                               (self.input_shape[0], self.input_shape[1]), need_detect_box=self.need_detect_box)
         device      = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.net.load_state_dict(torch.load(self.model_path, map_location=device))
         self.net    = self.net.eval()
@@ -122,7 +79,7 @@ class YOLO(object):
     #---------------------------------------------------#
     #   检测图片
     #---------------------------------------------------#
-    def detect_image(self, image, crop = False, count = False):
+    def detect_image(self, image, crop=False, count=False):
         #---------------------------------------------------#
         #   计算输入图片的高和宽
         #---------------------------------------------------#
@@ -137,7 +94,7 @@ class YOLO(object):
         #   也可以直接resize进行识别
         #---------------------------------------------------------#
         image_data  = resize_image(image, (self.input_shape[1], self.input_shape[0]), self.letterbox_image)
-        image_data.show()
+        # image_data.show()
         #---------------------------------------------------------#
         #   添加上batch_size维度
         #---------------------------------------------------------#
@@ -158,37 +115,16 @@ class YOLO(object):
             results = self.bbox_util.non_max_suppression(torch.cat(outputs, 1), self.num_classes, self.input_shape,
                         image_shape, self.letterbox_image, conf_thres = self.confidence, nms_thres = self.nms_iou)
 
-            # model_path = 'model_data/models.onnx'
-            # input_layer_names = ["images"]
-            # output_layer_names = ["output1", "output2"]
-            # print(f'Starting export with onnx {onnx.__version__}.')
-            # print('model:', self.net)
-            # torch.onnx.export(self.net,
-            #                   images,
-            #                   f=model_path,
-            #                   verbose=False,
-            #                   opset_version=12,
-            #                   training=torch.onnx.TrainingMode.EVAL,
-            #                   do_constant_folding=True,
-            #                   input_names=input_layer_names,
-            #                   output_names=output_layer_names,
-            #                   dynamic_axes=None)
-            #
-            # # Checks
-            # model_onnx = onnx.load(model_path)  # load onnx model
-            # onnx.checker.check_model(model_onnx)  # check onnx model
-
-
-            if results[0] is None: 
+            if results[0] is None:
                 return image
 
-            top_label   = np.array(results[0][:, 6], dtype = 'int32')
+            top_label   = np.array(results[0][:, 6], dtype='int32')
             top_conf    = results[0][:, 4] * results[0][:, 5]
             top_boxes   = results[0][:, :4]
         #---------------------------------------------------------#
         #   设置字体与边框厚度
         #---------------------------------------------------------#
-        font        = ImageFont.truetype(font='model_data/simhei.ttf', size=np.floor(3e-2 * image.size[1] + 0.5).astype('int32'))
+        font        = ImageFont.truetype(font='dcmyolo/model_data/simhei.ttf', size=np.floor(3e-2 * image.size[1] + 0.5).astype('int32'))
         thickness   = int(max((image.size[0] + image.size[1]) // np.mean(self.input_shape), 1))
         #---------------------------------------------------------#
         #   计数
@@ -404,7 +340,7 @@ class YOLO(object):
             OperatorSetIdProto
         from onnx.helper import make_tensor, make_tensor_value_info, make_attribute, make_model, make_node
 
-        dynamic_batch = False
+        # dynamic_batch = False
         model_onnx = onnx.load(model_path)
         graph = model_onnx.graph
         ngraph = GraphProto()
@@ -461,33 +397,6 @@ class YOLO(object):
         )
         ngraph.node.append(gather)
 
-        # ngraph.value_info.extend([nms])
-        # if dynamic_batch:
-        #     num_detection = make_tensor_value_info('num_detections', TensorProto.INT32, ["-1", 1])
-        #     nmsed_box = make_tensor_value_info('nmsed_boxes', TensorProto.FLOAT, ["-1", 200, 4])
-        #     nmsed_score = make_tensor_value_info('nmsed_scores', TensorProto.FLOAT, ["-1", 200, 1])
-        #     nmsed_class = make_tensor_value_info('nmsed_classes', TensorProto.FLOAT, ["-1", 200, 1])
-        # else:
-        #     num_detection = make_tensor_value_info('num_detections', TensorProto.INT32, [1, 1])
-        #     nmsed_box = make_tensor_value_info('nmsed_boxes', TensorProto.FLOAT, [1, 200, 4])
-        #     nmsed_score = make_tensor_value_info('nmsed_scores', TensorProto.FLOAT, [1, 200, 1])
-        #     nmsed_class = make_tensor_value_info('nmsed_classes', TensorProto.FLOAT, [1, 200, 1])
-
-        # ngraph.output.extend(
-        #     nms,
-        #     inputs=[
-        #         boxes,
-        #         scores,
-        #         max_output_boxes_per_class,
-        #         iou_threshold,
-        #         score_threshold,
-        #     ],
-        #     outputs=[selected_indices],
-        #     name="NonMaxSuppression",
-        # )
-        # selected_indices = helper.make_tensor_value_info('selected_indices', TensorProto.INT64, [2, 3])
-        # iou_threshold = helper.make_tensor_value_info('iou_threshold', TensorProto.INT64, [-1])
-
         ngraph.input.extend([helper.make_tensor_value_info('max_output_boxes_per_class', TensorProto.INT64, [1])])
         ngraph.input.extend([helper.make_tensor_value_info('iou_threshold', TensorProto.FLOAT, [1])])
         ngraph.input.extend([helper.make_tensor_value_info('score_threshold', TensorProto.FLOAT, [1])])
@@ -496,7 +405,6 @@ class YOLO(object):
         ngraph.input.extend([helper.make_tensor_value_info('slice101_axes', TensorProto.INT64, [1])])
         ngraph.input.extend([helper.make_tensor_value_info('slice101_steps', TensorProto.INT64, [1])])
         ngraph.input.extend([helper.make_tensor_value_info('squeeze101_axes', TensorProto.INT64, [1])])
-
 
         ngraph.output.extend([helper.make_tensor_value_info('selected_indices', TensorProto.INT64, [-1, 3])])
         ngraph.output.extend([helper.make_tensor_value_info('gather101', TensorProto.FLOAT, [-1])])
@@ -511,65 +419,6 @@ class YOLO(object):
         model = make_model(ngraph, **model_attrs)
 
         return model
-
-    def run_onnx(self, model_path, img_path):
-        import onnxruntime
-        onnx_model = onnxruntime.InferenceSession(model_path, providers=onnxruntime.get_available_providers())
-        # output = ["selected_indices", 'output1', 'output2', 'gather101']
-        output = ['gather101']
-        image = Image.open(img_path)
-        input_shape = 640
-        letterbox_image = False
-        org_h, org_w = np.array(np.shape(image)[0:2])
-        # ---------------------------------------------------------#
-        #   在这里将图像转换成RGB图像，防止灰度图在预测时报错。
-        #   代码仅仅支持RGB图像的预测，所有其它类型的图像都会转化成RGB
-        # ---------------------------------------------------------#
-        image = cvtColor(image)
-        # ---------------------------------------------------------#
-        #   给图像增加灰条，实现不失真的resize
-        #   也可以直接resize进行识别
-        # ---------------------------------------------------------#
-        image_data = resize_image(image, (input_shape, input_shape), letterbox_image)
-        image_data.show()
-        # ---------------------------------------------------------#
-        #   添加上batch_size维度
-        # ---------------------------------------------------------#
-        image_data = np.expand_dims(np.transpose(preprocess_input(np.array(image_data, dtype='float32')), (2, 0, 1)), 0)
-        results = onnx_model.run(output, {"images": image_data,
-                                          "max_output_boxes_per_class": [20],
-                                          "iou_threshold": [0.7],
-                                          "score_threshold": [0.5],
-                                          "slice101_starts": [2], "slice101_ends": [3],
-                                          "slice101_axes": [1], "slice101_steps": [1],
-                                          "squeeze101_axes": [1]
-                                          })
-
-        # class_names, num_classes = get_classes('model_data/toukui_classes.txt')
-        # anchors, num_anchors = get_anchors('model_data/yolo_anchors.txt')
-        img_org = cv2.imread(img_path)
-        # img_org = cv2.resize(img_org, (input_shape, input_shape))
-        # for item in results[3][0]:
-        # 只有一个框的时候，会比多个框少一维
-        if len(results[0].shape) == 2:
-            results = results[0]
-        else:
-            results = results[0][0]
-        scale_x = org_w / input_shape
-        scale_y = org_h / input_shape
-        for item in results:
-            cx, cy, w, h, obj_cnf, cls = item
-            # w, h = [10, 10]
-            x1 = (cx - w / 2) * scale_x
-            y1 = (cy - h / 2) * scale_y
-            x2 = (cx + w / 2) * scale_x
-            y2 = (cy + h / 2) * scale_y
-            img_org = cv2.rectangle(img_org, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 255), 2)
-            img_org = cv2.putText(img_org, str(cls) + '-' + str(obj_cnf)[0:4], (int(x1), int(y1)),
-                                  cv2.FONT_HERSHEY_SCRIPT_SIMPLEX, 1, (0, 255, 255), 2)
-        # cv2.imwrite(target_path, img_org)
-        cv2.imshow('1', img_org)
-        cv2.waitKey(-1)
 
     def get_map_txt(self, image_id, image, class_names, map_out_path):
         f = open(os.path.join(map_out_path, "detection-results/"+image_id+".txt"), "w", encoding='utf-8') 

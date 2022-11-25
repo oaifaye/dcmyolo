@@ -25,36 +25,53 @@ import argparse
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser(description="dcmyolo train script")
-    parser.add_argument('--classes_path', type=str, default='dcmyolo/model_data/coco_classes.txt')
-    parser.add_argument('--anchors_path', type=str, default='dcmyolo/model_data/coco_anchors.txt')
-    parser.add_argument('--train_annotation_path', type=str, default='data/coco/train.txt')
-    parser.add_argument('--val_annotation_path', type=str, default='data/coco/val.txt')
-    parser.add_argument('--phi', type=str, default='s')
-    parser.add_argument('--backbone_model_dir', type=str, default='logs/pretrained.pth')
-    parser.add_argument('--model_path', type=str, default='logs/pretrained.pth')
-    parser.add_argument('--save_period', type=int, default=10)
-    parser.add_argument('--save_dir', type=str, default='logs_wangzhe')
-    parser.add_argument('--input_shape', nargs='+', type=int, default=[640, 640])
-    parser.add_argument('--use_fp16', action='store_true')
-    parser.add_argument('--use_mosaic', action='store_true')
-    parser.add_argument('--mosaic_prob', type=float, default=0.5)
-    parser.add_argument('--use_mixup', action='store_true')
-    parser.add_argument('--mixup_prob', type=float, default=0.5)
-    parser.add_argument('--special_aug_ratio', type=float, default=0.7)
-    parser.add_argument('--epoch', type=int, default=100)
-    parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--label_smoothing', type=float, default=0)
-    parser.add_argument('--init_lr', type=float, default=1e-2)
-    parser.add_argument('--min_lr', type=float, default=1e-4)
-    parser.add_argument('--optimizer_type', type=str, default="sgd")
-    parser.add_argument('--momentum', type=float, default=0.937)
-    parser.add_argument('--weight_decay', type=float, default=5e-4)
-    parser.add_argument('--lr_decay_type', type=str, default="step")
-    parser.add_argument('--eval_flag', action='store_true')
-    parser.add_argument('--eval_period', type=int, default=10)
-    parser.add_argument('--num_workers', type=int, default=4)
+    parser.add_argument('--classes_path', type=str, default='dcmyolo/model_data/coco_classes.txt', help="类别标签文件路径")
+    parser.add_argument('--anchors_path', type=str, default='dcmyolo/model_data/coco_anchors.txt', help="anchors文件路径")
+    parser.add_argument('--train_annotation_path', type=str, default='data/coco/train.txt', help="存放训练集图片路径和标签的txt")
+    parser.add_argument('--val_annotation_path', type=str, default='data/coco/val.txt', help="存放验证图片路径和标签的txt")
+    parser.add_argument('--phi', type=str, default='s', help="所使用的YoloV5的版本。n、s、m、l、x")
+    # ---------------------------------------------------------------------#
+    # --backbone_model_dir参数
+    # 如果有backbone的预训练模型，可以backbone预训练模型目录，当model_path不存在的时候不加载整个模型的权值。
+    # 只写到模型文件的上一级目录即可，文件名会根据phi自动计算（前提是从百度网盘下载的模型文件名没改）
+    # ---------------------------------------------------------------------#
+    parser.add_argument('--backbone_model_dir', type=str, default='dcmyolo/model_data/', help="backbone的预训练模型，写到上一级目录即可")
+    parser.add_argument('--model_path', type=str, default='dcmyolo/model_data/pretrained.pth', help="yolov5预训练模型的路径")
+    parser.add_argument('--save_period', type=int, default=10, help="多少个epoch保存一次权值")
+    parser.add_argument('--save_dir', type=str, default='logs_wangzhe', help="权值与日志文件保存的文件夹")
+    parser.add_argument('--input_shape', nargs='+', type=int, default=[640, 640], help="输入的shape大小，一定要是32的倍数")
+    parser.add_argument('--use_fp16', action='store_true', help="是否使用混合精度训练")
+    #------------------------------------------------------------------#
+    #   mosaic              马赛克数据增强。
+    #   mosaic_prob         每个step有多少概率使用mosaic数据增强，默认50%。
+    #
+    #   mixup               是否使用mixup数据增强，仅在mosaic=True时有效。
+    #                       只会对mosaic增强后的图片进行mixup的处理。
+    #   mixup_prob          有多少概率在mosaic后使用mixup数据增强，默认50%。
+    #                       总的mixup概率为mosaic_prob * mixup_prob。
+    #
+    #   special_aug_ratio   参考YoloX，由于Mosaic生成的训练图片，远远脱离自然图片的真实分布。
+    #                       当mosaic=True时，本代码会在special_aug_ratio范围内开启mosaic。
+    #                       默认为前70%个epoch，100个世代会开启70个世代。
+    #------------------------------------------------------------------#
+    parser.add_argument('--use_mosaic', action='store_true', help="是否使用马赛克数据增强")
+    parser.add_argument('--mosaic_prob', type=float, default=0.5, help="每个step有多少概率使用mosaic数据增强")
+    parser.add_argument('--use_mixup', action='store_true', help="是否使用mixup数据增强，仅在mosaic=True时有效")
+    parser.add_argument('--mixup_prob', type=float, default=0.5, help="有多少概率在mosaic后使用mixup数据增强")
+    parser.add_argument('--special_aug_ratio', type=float, default=0.7, help="当mosaic=True时，会在该范围内开启mosaic")
+    parser.add_argument('--epoch', type=int, default=100, help="总迭代次数")
+    parser.add_argument('--batch_size', type=int, default=128, help="每批次取多少张图片")
+    parser.add_argument('--label_smoothing', type=float, default=0, help="是否开启标签平滑")
+    parser.add_argument('--init_lr', type=float, default=1e-2, help="初始学习率")
+    parser.add_argument('--min_lr', type=float, default=1e-4, help="最小学习率")
+    parser.add_argument('--optimizer_type', type=str, default="sgd", help="使用到的优化器种类，可选的有adam、sgd")
+    parser.add_argument('--momentum', type=float, default=0.937, help="优化器内部使用到的momentum参数")
+    parser.add_argument('--weight_decay', type=float, default=5e-4, help="权值衰减，可防止过拟合")
+    parser.add_argument('--lr_decay_type', type=str, default="step", help="使用到的学习率下降方式，可选的有step、cos")
+    parser.add_argument('--eval_flag', action='store_true', help="是否在训练时进行评估，评估对象为验证集")
+    parser.add_argument('--eval_period', type=int, default=10, help="代表多少个epoch评估一次")
+    parser.add_argument('--num_workers', type=int, default=4, help="多少个线程读取数据")
     args = parser.parse_args()
 
     use_cuda            = torch.cuda.is_available()
@@ -205,9 +222,10 @@ if __name__ == "__main__":
     #------------------------------------------------------#
     #   创建yolo模型
     #------------------------------------------------------#
-    model = YoloBody(anchors_mask, num_classes, phi, backbone_model_dir)
+    model = YoloBody(anchors_mask, num_classes, phi, backbone_model_dir=backbone_model_dir)
     weights_init(model)
     if os.path.exists(model_path):
+        print('发现预训练模型: ', model_path)
         #------------------------------------------------------#
         #   根据预训练权重的Key和模型的Key进行加载
         #------------------------------------------------------#

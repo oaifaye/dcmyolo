@@ -3,27 +3,9 @@ import random
 import xml.etree.ElementTree as ET
 
 import numpy as np
-
+import argparse
 from dcmyolo.utils.utils_data import get_classes
 
-# 存放物体种类的文件
-classes_path        = 'dcmyolo/model_data/wangzhe_classes.txt'
-
-# 存数据的目录，写到Annotations上一级
-data_dir = 'data/wangzhe'
-
-# trainval_percent用于指定(训练集+验证集)与测试集的比例，默认情况下 (训练集+验证集):测试集 = 9:1
-# train_percent用于指定(训练集+验证集)中训练集与验证集的比例，默认情况下 训练集:验证集 = 9:1
-trainval_percent    = 0.95
-train_percent       = 0.95
-
-gen_sets  = ['train', 'val', 'test']
-classes, _      = get_classes(classes_path)
-#-------------------------------------------------------#
-#   统计目标数量
-#-------------------------------------------------------#
-photo_nums  = np.zeros(len(gen_sets))
-nums        = np.zeros(len(classes))
 def convert_annotation(image_id, list_file):
     in_file = open(os.path.join(data_dir, 'Annotations/%s.xml'%(image_id)), encoding='utf-8')
     tree = ET.parse(in_file)
@@ -34,8 +16,8 @@ def convert_annotation(image_id, list_file):
         if obj.find('difficult')!=None:
             difficult = obj.find('difficult').text
         cls = obj.find('name').text
-        # if cls not in classes or int(difficult)==1:
-        #     continue
+        if cls not in classes :
+            continue
         cls_id = classes.index(cls)
         xmlbox = obj.find('bndbox')
         b = (int(float(xmlbox.find('xmin').text)), int(float(xmlbox.find('ymin').text)), int(float(xmlbox.find('xmax').text)), int(float(xmlbox.find('ymax').text)))
@@ -44,6 +26,32 @@ def convert_annotation(image_id, list_file):
         nums[classes.index(cls)] = nums[classes.index(cls)] + 1
         
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="")
+    parser.add_argument('--classes_path', type=str, default='dcmyolo/model_data/voc_classes.txt', help="存放标签种类的文件")
+    parser.add_argument('--data_dir', type=str, default='data/voc', help="存数据的目录，写到Annotations上一级")
+    parser.add_argument('--trainval_percent', type=float, default=0.9, help="用于指定(训练集+验证集)与测试集的比例")
+    parser.add_argument('--train_percent', type=float, default=0.9, help="用于指定(训练集+验证集)中训练集与验证集的比例")
+    args = parser.parse_args()
+
+    # 存放标签种类的文件
+    classes_path = args.classes_path
+
+    # 存数据的目录，写到Annotations上一级
+    data_dir = args.data_dir
+
+    # trainval_percent用于指定(训练集+验证集)与测试集的比例，默认情况下 (训练集+验证集):测试集 = 9:1
+    # train_percent用于指定(训练集+验证集)中训练集与验证集的比例，默认情况下 训练集:验证集 = 9:1
+    trainval_percent = args.trainval_percent
+    train_percent = args.train_percent
+
+    gen_sets = ['train', 'val', 'test']
+    classes, _ = get_classes(classes_path)
+    # -------------------------------------------------------#
+    #   统计目标数量
+    # -------------------------------------------------------#
+    photo_nums = np.zeros(len(gen_sets))
+    nums = np.zeros(len(classes))
+
     random.seed(0)
     if " " in os.path.abspath(data_dir):
         raise ValueError("数据集存放的文件夹路径与图片名称中不可以存在空格，否则会影响正常的模型训练，请注意修改。")

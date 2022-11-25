@@ -5,4 +5,4 @@
  该项目现在实现了基于pytorch的YOLOV5，将持续更新，欢迎关注。
 
 相关说明请查看：
-http://t.csdn.cn/2s3k0
+http://t.csdn.cn/YiupW

@@ -138,6 +138,8 @@ class CSPDarknet(nn.Module):
             checkpoint = torch.load(backbone_model_path, map_location="cpu")
             self.load_state_dict(checkpoint, strict=False)
             print("Load weights from ", backbone_model_path)
+        else:
+            print("cspdarknet weights not exist ", backbone_model_path)
 
     def forward(self, x):
         x = self.stem(x)
