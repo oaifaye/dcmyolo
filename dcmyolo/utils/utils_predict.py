@@ -299,7 +299,7 @@ class YOLO(object):
         input_layer_names = ["images"]
         output_layer_names = ["boxes", "scores", "boxes_scores"]
         print(f'Starting export with onnx {onnx.__version__}.')
-        print('model:', self.net)
+        # print('model:', self.net)
         torch.onnx.export(self.net,
                           im,
                           f=model_path,
@@ -400,14 +400,27 @@ class YOLO(object):
         ngraph.input.extend([helper.make_tensor_value_info('max_output_boxes_per_class', TensorProto.INT64, [1])])
         ngraph.input.extend([helper.make_tensor_value_info('iou_threshold', TensorProto.FLOAT, [1])])
         ngraph.input.extend([helper.make_tensor_value_info('score_threshold', TensorProto.FLOAT, [1])])
-        ngraph.input.extend([helper.make_tensor_value_info('slice101_starts', TensorProto.INT64, [1])])
-        ngraph.input.extend([helper.make_tensor_value_info('slice101_ends', TensorProto.INT64, [1])])
-        ngraph.input.extend([helper.make_tensor_value_info('slice101_axes', TensorProto.INT64, [1])])
-        ngraph.input.extend([helper.make_tensor_value_info('slice101_steps', TensorProto.INT64, [1])])
-        ngraph.input.extend([helper.make_tensor_value_info('squeeze101_axes', TensorProto.INT64, [1])])
+        # ngraph.input.extend([helper.make_tensor_value_info('slice101_starts', TensorProto.INT64, [1])])
+        # ngraph.input.extend([helper.make_tensor_value_info('slice101_ends', TensorProto.INT64, [1])])
+        # ngraph.input.extend([helper.make_tensor_value_info('slice101_axes', TensorProto.INT64, [1])])
+        # ngraph.input.extend([helper.make_tensor_value_info('slice101_steps', TensorProto.INT64, [1])])
+        # ngraph.input.extend([helper.make_tensor_value_info('squeeze101_axes', TensorProto.INT64, [1])])
 
         ngraph.output.extend([helper.make_tensor_value_info('selected_indices', TensorProto.INT64, [-1, 3])])
         ngraph.output.extend([helper.make_tensor_value_info('gather101', TensorProto.FLOAT, [-1])])
+
+        # bias_values = np.random.uniform(-10, 10, size=[1]).astype("float32")
+
+        # "slice101_starts": [2], "slice101_ends": [3],
+        # "slice101_axes": [1], "slice101_steps": [1],
+        # "squeeze101_axes": [1]
+        initializer_slice101_starts = make_tensor(name="slice101_starts", data_type=onnx.TensorProto.INT64, dims=[1], vals=[2])
+        initializer_slice101_ends = make_tensor(name="slice101_ends", data_type=onnx.TensorProto.INT64, dims=[1], vals=[3])
+        initializer_slice101_axes = make_tensor(name="slice101_axes", data_type=onnx.TensorProto.INT64, dims=[1], vals=[1])
+        initializer_slice101_steps = make_tensor(name="slice101_steps", data_type=onnx.TensorProto.INT64, dims=[1], vals=[1])
+        # initializer_squeeze101_axes = make_tensor(name="squeeze101_axes", data_type=onnx.TensorProto.INT64, dims=[1], vals=[1])
+        ngraph.initializer.extend([initializer_slice101_starts, initializer_slice101_ends, initializer_slice101_axes,
+                                   initializer_slice101_steps])
 
         model_attrs = dict(
             ir_version=model_onnx.ir_version,

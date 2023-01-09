@@ -1,11 +1,11 @@
 # coding=utf-8
 # ================================================================
 #
-#   File name   : export.py
+#   File name   : predict_onnx.py
 #   Author      : Faye
 #   E-mail      : xiansheng14@sina.com
-#   Created date: 2022/11/24 15:17 
-#   Description :
+#   Created date: 2022/10/26 13:26
+#   Description : pth转换onnx，onnx执行推理
 #
 # ================================================================
 import argparse
@@ -68,9 +68,10 @@ def predict_image(onnx_model, class_names, image, input_shape=(640, 640), iou_th
                                       "max_output_boxes_per_class": [20],
                                       "iou_threshold": [1 - iou_threshold],
                                       "score_threshold": [score_threshold],
-                                      "slice101_starts": [2], "slice101_ends": [3],
-                                      "slice101_axes": [1], "slice101_steps": [1],
-                                      "squeeze101_axes": [1]
+                                      # "slice101_starts": [2],
+                                      # "slice101_ends": [3],
+                                      # "slice101_axes": [1], "slice101_steps": [1],
+                                      # "squeeze101_axes": [1]
                                       })
     # img_org = cv2.imread(img_path)
     # 只有一个框的时候，会比多个框少一维

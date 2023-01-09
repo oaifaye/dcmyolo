@@ -397,7 +397,7 @@ class YoloDataset(Dataset):
         num_layers  = len(self.anchors_mask)
         
         input_shape = np.array(self.input_shape, dtype='int32')
-        grid_shapes = [input_shape // {0:32, 1:16, 2:8, 3:4}[l] for l in range(num_layers)]
+        grid_shapes = [input_shape // {0: 32, 1: 16, 2: 8, 3: 4}[l] for l in range(num_layers)]
         y_true      = [np.zeros((len(self.anchors_mask[l]), grid_shapes[l][0], grid_shapes[l][1], self.bbox_attrs), dtype='float32') for l in range(num_layers)]
         box_best_ratio = [np.zeros((len(self.anchors_mask[l]), grid_shapes[l][0], grid_shapes[l][1]), dtype='float32') for l in range(num_layers)]
         
@@ -406,7 +406,7 @@ class YoloDataset(Dataset):
         
         for l in range(num_layers):
             in_h, in_w      = grid_shapes[l]
-            anchors         = np.array(self.anchors) / {0:32, 1:16, 2:8, 3:4}[l]
+            anchors         = np.array(self.anchors) / {0: 32, 1: 16, 2: 8, 3: 4}[l]
             
             batch_target = np.zeros_like(targets)
             #-------------------------------------------------------#
@@ -436,9 +436,12 @@ class YoloDataset(Dataset):
             max_ratios           = np.max(ratios, axis = -1)
             
             for t, ratio in enumerate(max_ratios):
-                #-------------------------------------------------------#
-                #   ratio : 9
-                #-------------------------------------------------------#
+                # -------------------------------------------------------#
+                #   和gt相比 去掉宽高相差太大的anchors
+                #   这里阈值=4
+                #   因为tw = (sigmoid(gtw) * 2) ** 2  th = (sigmoid(gth) * 2) ** 2
+                #   tw和th的取值是(0, 4)
+                # -------------------------------------------------------#
                 over_threshold = ratio < self.threshold
                 over_threshold[np.argmin(ratio)] = True
                 for k, mask in enumerate(self.anchors_mask[l]):

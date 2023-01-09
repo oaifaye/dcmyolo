@@ -1,5 +1,14 @@
 # -*- coding=utf-8 -*-
-import glob
+# coding=utf-8
+# ================================================================
+#
+#   File name   : make_anchors.py
+#   Author      : Faye
+#   E-mail      : xiansheng14@sina.com
+#   Created date: 2022/10/26 13:26
+#   Description : 生成数据集的anchors文件
+#
+# ================================================================
 import os
 import sys
 import xml.etree.ElementTree as ET

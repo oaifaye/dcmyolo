@@ -22,50 +22,50 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, eval_callbac
                 images  = images.cuda()
                 targets = [ann.cuda() for ann in targets]
                 y_trues = [ann.cuda() for ann in y_trues]
-        #----------------------#
+        # ----------------------#
         #   清零梯度
-        #----------------------#
+        # ----------------------#
         optimizer.zero_grad()
         if not fp16:
-            #----------------------#
+            # ----------------------#
             #   前向传播
-            #----------------------#
+            # ----------------------#
             outputs         = model_train(images)
 
             loss_value_all  = 0
-            #----------------------#
+            # ----------------------#
             #   计算损失
-            #----------------------#
+            # ----------------------#
             for l in range(len(outputs)):
                 loss_item = yolo_loss(l, outputs[l], targets, y_trues[l])
                 loss_value_all += loss_item
             loss_value = loss_value_all
 
-            #----------------------#
+            # ----------------------#
             #   反向传播
-            #----------------------#
+            # ----------------------#
             loss_value.backward()
             optimizer.step()
         else:
             from torch.cuda.amp import autocast
             with autocast():
-                #----------------------#
+                # ----------------------#
                 #   前向传播
-                #----------------------#
+                # ----------------------#
                 outputs         = model_train(images)
 
                 loss_value_all  = 0
-                #----------------------#
+                # ----------------------#
                 #   计算损失
-                #----------------------#
+                # ----------------------#
                 for l in range(len(outputs)):
                     loss_item = yolo_loss(l, outputs[l], targets, y_trues[l])
                     loss_value_all += loss_item
                 loss_value = loss_value_all
 
-            #----------------------#
+            # ----------------------#
             #   反向传播
-            #----------------------#
+            # ----------------------#
             scaler.scale(loss_value).backward()
             scaler.step(optimizer)
             scaler.update()

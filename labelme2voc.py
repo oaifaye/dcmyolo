@@ -1,4 +1,14 @@
 #!/usr/bin/env python
+# coding=utf-8
+# ================================================================
+#
+#   File name   : labelme2voc.py
+#   Author      : Faye
+#   E-mail      : xiansheng14@sina.com
+#   Created date: 2022/10/26 13:26
+#   Description : 将labelme的json文件转换成voc格式
+#
+# ================================================================
 
 from __future__ import print_function
 

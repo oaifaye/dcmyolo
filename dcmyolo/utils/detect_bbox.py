@@ -49,7 +49,7 @@ class DetectBox(nn.Module):
             y = inputs[i]
             # y = inputs[i].sigmoid()
             stride = self.input_shape[0] / ny
-            print('stride:', stride)
+            # print('stride:', stride)
             y[..., 0] = torch.sigmoid(y[..., 0]) # x
             y[..., 1] = torch.sigmoid(y[..., 1])  # y
             y[..., 2] = torch.sigmoid(y[..., 2])  # w

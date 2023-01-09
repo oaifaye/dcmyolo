@@ -1,7 +1,13 @@
-#-----------------------------------------------------------------------#
-#   predict.py将单张图片预测、摄像头检测、FPS测试和目录遍历检测等功能
-#   整合到了一个py文件中，通过指定mode进行模式的修改。
-#-----------------------------------------------------------------------#
+# coding=utf-8
+# ================================================================
+#
+#   File name   : predict_dcmyolo.py
+#   Author      : Faye
+#   E-mail      : xiansheng14@sina.com
+#   Created date: 2022/10/26 13:26
+#   Description : 推理demo，包括检测图片、视频
+#
+# ================================================================
 import time
 import argparse
 import cv2
@@ -85,7 +91,7 @@ def heatmap():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="dcmyolo train script")
+    parser = argparse.ArgumentParser(description="dcmyolo predict script")
     parser.add_argument('--operation_type', type=str, default='', help="操作类型 predict_image / predict_video  / heatmap")
     parser.add_argument('--model_path', type=str, default='dcmyolo/model_data/wangzhe_best_weights.pth', help="pth模型的路径")
     parser.add_argument('--classes_path', type=str, default='dcmyolo/model_data/wangzhe_classes.txt', help="分类标签文件")

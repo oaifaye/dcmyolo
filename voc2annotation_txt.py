@@ -1,3 +1,13 @@
+# coding=utf-8
+# ================================================================
+#
+#   File name   : voc2annotation_txt.py
+#   Author      : Faye
+#   E-mail      : xiansheng14@sina.com
+#   Created date: 2022/10/26 13:26
+#   Description : 将VOC格式转换成项目需要的格式
+#
+# ================================================================
 import os
 import random
 import xml.etree.ElementTree as ET

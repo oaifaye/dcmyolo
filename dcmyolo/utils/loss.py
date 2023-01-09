@@ -12,6 +12,7 @@
 import torch
 from torch.nn import Module
 import numpy as np
+import math
 
 
 class YOLOLoss(Module):
@@ -67,6 +68,7 @@ class YOLOLoss(Module):
         # ----------------------------------------------------#
         #   求出预测框左上角右下角
         # ----------------------------------------------------#
+        print("max:", torch.max(b1[...,0]), torch.max(b2[...,0]))
         b1_xy = b1[..., :2]
         b1_wh = b1[..., 2:4]
         b1_wh_half = b1_wh / 2.
@@ -106,6 +108,83 @@ class YOLOLoss(Module):
         giou = iou - (enclose_area - union_area) / enclose_area
 
         return giou
+
+    def bbox_iou(self, box1, box2, xywh=False, giou=False, diou=False, ciou=False, eiou=False, eps=1e-7):
+        """
+        实现各种IoU
+        Parameters
+        ----------
+        box1        shape(b, c, h, w,4)
+        box2        shape(b, c, h, w,4)
+        xywh        是否使用中心点和wh，如果是False，输入就是左上右下四个坐标
+        GIoU        是否GIoU
+        DIoU        是否DIoU
+        CIoU        是否CIoU
+        EIoU        是否EIoU
+        eps         防止除零的小量
+
+        Returns
+        -------
+
+        """
+        # 获取边界框的坐标
+        if xywh:
+            # 将 xywh 转换成 xyxy
+            b1_x1, b1_x2 = box1[..., 0] - box1[..., 2] / 2, box1[..., 0] + box1[..., 2] / 2
+            b1_y1, b1_y2 = box1[..., 1] - box1[..., 3] / 2, box1[..., 1] + box1[..., 3] / 2
+            b2_x1, b2_x2 = box2[..., 0] - box2[..., 2] / 2, box2[..., 0] + box2[..., 2] / 2
+            b2_y1, b2_y2 = box2[..., 1] - box2[..., 3] / 2, box2[..., 1] + box2[..., 3] / 2
+
+        else:
+            # x1, y1, x2, y2 = box1
+            b1_x1, b1_y1, b1_x2, b1_y2 = box1[..., 0], box1[..., 1], box1[..., 2], box1[..., 3]
+            b2_x1, b2_y1, b2_x2, b2_y2 = box2[..., 0], box2[..., 1], box2[..., 2], box2[..., 3]
+
+        # 区域交集
+        inter = (torch.min(b1_x2, b2_x2) - torch.max(b1_x1, b2_x1)).clamp(0) * \
+                (torch.min(b1_y2, b2_y2) - torch.max(b1_y1, b2_y1)).clamp(0)
+
+        # 区域并集
+        w1, h1 = b1_x2 - b1_x1, b1_y2 - b1_y1 + eps
+        w2, h2 = b2_x2 - b2_x1, b2_y2 - b2_y1 + eps
+        union = w1 * h1 + w2 * h2 - inter + eps
+        # 计算iou
+        iou = inter / union
+
+        if giou or diou or ciou or eiou:
+            # 计算最小外接矩形的wh
+            cw = torch.max(b1_x2, b2_x2) - torch.min(b1_x1, b2_x1)
+            ch = torch.max(b1_y2, b2_y2) - torch.min(b1_y1, b2_y1)
+
+            if ciou or diou or eiou:
+                # 计算最小外接矩形角线的平方
+                c2 = cw ** 2 + ch ** 2 + eps
+                # 计算最小外接矩形中点距离的平方
+                rho2 = ((b2_x1 + b2_x2 - b1_x1 - b1_x2) ** 2 +
+                        (b2_y1 + b2_y2 - b1_y1 - b1_y2) ** 2) / 4
+                if diou:
+                    # 输出DIoU
+                    return iou - rho2 / c2
+                elif ciou:
+                    v = (4 / math.pi ** 2) * torch.pow(torch.atan(w2 / h2) - torch.atan(w1 / h1), 2)
+                    with torch.no_grad():
+                        alpha = v / (v - iou + (1 + eps))
+                    # 输出CIoU
+                    return iou - (rho2 / c2 + v * alpha)
+                elif eiou:
+                    rho_w2 = ((b2_x2 - b2_x1) - (b1_x2 - b1_x1)) ** 2
+                    rho_h2 = ((b2_y2 - b2_y1) - (b1_y2 - b1_y1)) ** 2
+                    cw2 = cw ** 2 + eps
+                    ch2 = ch ** 2 + eps
+                    # 输出EIoU
+                    return iou - (rho2 / c2 + rho_w2 / cw2 + rho_h2 / ch2)
+            else:
+                c_area = cw * ch + eps  # convex area
+                # 输出GIoU
+                return iou - (c_area - union) / c_area
+        else:
+            # 输出IoU
+            return iou
 
     # ---------------------------------------------------#
     #   平滑标签
@@ -172,19 +251,15 @@ class YOLOLoss(Module):
         #   种类置信度
         # -----------------------------------------------#
         pred_cls = torch.sigmoid(prediction[..., 5:])
-        # -----------------------------------------------#
-        #   self.get_target已经合并到dataloader中
-        #   原因是在这里执行过慢，会大大延长训练时间
-        # -----------------------------------------------#
-        # y_true, noobj_mask = self.get_target(l, targets, scaled_anchors, in_h, in_w)
 
         # ---------------------------------------------------------------#
         #   将预测结果进行解码，判断预测结果和真实值的重合程度
         #   如果重合程度过大则忽略，因为这些特征点属于预测比较准确的特征点
         #   作为负样本不合适
         # ----------------------------------------------------------------#
+        print("max x:", torch.max(x))
         pred_boxes = self.get_pred_boxes(l, x, y, h, w, targets, scaled_anchors, in_h, in_w)
-
+        print("max pred_boxes:", torch.max(pred_boxes[...,0]))
         if self.cuda:
             y_true = y_true.type_as(x)
 
@@ -227,113 +302,6 @@ class YOLOLoss(Module):
             return [[0, 0], [-1, 0], [0, -1]]
         else:
             return [[0, 0], [1, 0], [0, -1]]
-
-    def get_target(self, l, targets, anchors, in_h, in_w):
-        # -----------------------------------------------------#
-        #   计算一共有多少张图片
-        # -----------------------------------------------------#
-        bs = len(targets)
-        # -----------------------------------------------------#
-        #   用于选取哪些先验框不包含物体
-        #   bs, 3, 20, 20
-        # -----------------------------------------------------#
-        noobj_mask = torch.ones(bs, len(self.anchors_mask[l]), in_h, in_w, requires_grad=False)
-        # -----------------------------------------------------#
-        #   帮助找到每一个先验框最对应的真实框
-        # -----------------------------------------------------#
-        box_best_ratio = torch.zeros(bs, len(self.anchors_mask[l]), in_h, in_w, requires_grad=False)
-        # -----------------------------------------------------#
-        #   batch_size, 3, 20, 20, 5 + num_classes
-        # -----------------------------------------------------#
-        y_true = torch.zeros(bs, len(self.anchors_mask[l]), in_h, in_w, self.bbox_attrs, requires_grad=False)
-        for b in range(bs):
-            if len(targets[b]) == 0:
-                continue
-            batch_target = torch.zeros_like(targets[b])
-            # -------------------------------------------------------#
-            #   计算出正样本在特征层上的中心点
-            #   获得真实框相对于特征层的大小
-            # -------------------------------------------------------#
-            batch_target[:, [0, 2]] = targets[b][:, [0, 2]] * in_w
-            batch_target[:, [1, 3]] = targets[b][:, [1, 3]] * in_h
-            batch_target[:, 4] = targets[b][:, 4]
-            batch_target = batch_target.cpu()
-
-            # -----------------------------------------------------------------------------#
-            #   batch_target                                    : num_true_box, 5
-            #   batch_target[:, 2:4]                            : num_true_box, 2
-            #   torch.unsqueeze(batch_target[:, 2:4], 1)        : num_true_box, 1, 2
-            #   anchors                                         : 9, 2
-            #   torch.unsqueeze(torch.FloatTensor(anchors), 0)  : 1, 9, 2
-            #   ratios_of_gt_anchors    : num_true_box, 9, 2
-            #   ratios_of_anchors_gt    : num_true_box, 9, 2
-            #
-            #   ratios                  : num_true_box, 9, 4
-            #   max_ratios              : num_true_box, 9
-            #   max_ratios每一个真实框和每一个先验框的最大宽高比！
-            # ------------------------------------------------------------------------------#
-            ratios_of_gt_anchors = torch.unsqueeze(batch_target[:, 2:4], 1) / torch.unsqueeze(
-                torch.FloatTensor(anchors), 0)
-            ratios_of_anchors_gt = torch.unsqueeze(torch.FloatTensor(anchors), 0) / torch.unsqueeze(
-                batch_target[:, 2:4], 1)
-            ratios = torch.cat([ratios_of_gt_anchors, ratios_of_anchors_gt], dim=-1)
-            max_ratios, _ = torch.max(ratios, dim=-1)
-
-            for t, ratio in enumerate(max_ratios):
-                # -------------------------------------------------------#
-                #   ratio : 9
-                # -------------------------------------------------------#
-                over_threshold = ratio < self.threshold
-                over_threshold[torch.argmin(ratio)] = True
-                for k, mask in enumerate(self.anchors_mask[l]):
-                    if not over_threshold[mask]:
-                        continue
-                    # ----------------------------------------#
-                    #   获得真实框属于哪个网格点
-                    #   x  1.25     => 1
-                    #   y  3.75     => 3
-                    # ----------------------------------------#
-                    i = torch.floor(batch_target[t, 0]).long()
-                    j = torch.floor(batch_target[t, 1]).long()
-
-                    offsets = self.get_near_points(batch_target[t, 0], batch_target[t, 1], i, j)
-                    for offset in offsets:
-                        local_i = i + offset[0]
-                        local_j = j + offset[1]
-
-                        if local_i >= in_w or local_i < 0 or local_j >= in_h or local_j < 0:
-                            continue
-
-                        if box_best_ratio[b, k, local_j, local_i] != 0:
-                            if box_best_ratio[b, k, local_j, local_i] > ratio[mask]:
-                                y_true[b, k, local_j, local_i, :] = 0
-                            else:
-                                continue
-
-                        # ----------------------------------------#
-                        #   取出真实框的种类
-                        # ----------------------------------------#
-                        c = batch_target[t, 4].long()
-
-                        # ----------------------------------------#
-                        #   noobj_mask代表无目标的特征点
-                        # ----------------------------------------#
-                        noobj_mask[b, k, local_j, local_i] = 0
-                        # ----------------------------------------#
-                        #   tx、ty代表中心调整参数的真实值
-                        # ----------------------------------------#
-                        y_true[b, k, local_j, local_i, 0] = batch_target[t, 0]
-                        y_true[b, k, local_j, local_i, 1] = batch_target[t, 1]
-                        y_true[b, k, local_j, local_i, 2] = batch_target[t, 2]
-                        y_true[b, k, local_j, local_i, 3] = batch_target[t, 3]
-                        y_true[b, k, local_j, local_i, 4] = 1
-                        y_true[b, k, local_j, local_i, c + 5] = 1
-                        # ----------------------------------------#
-                        #   获得当前先验框最好的比例
-                        # ----------------------------------------#
-                        box_best_ratio[b, k, local_j, local_i] = ratio[mask]
-
-        return y_true, noobj_mask
 
     def get_pred_boxes(self, l, x, y, h, w, targets, scaled_anchors, in_h, in_w):
         # -----------------------------------------------------#
